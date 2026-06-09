@@ -16,6 +16,7 @@ from .config import Config, plugin_config
 from .file_server import register_archive_file_route
 from .message import send_payload_to_group, send_payload_to_private
 from .mirror import MirrorService
+from .schedule import parse_schedule
 
 __plugin_meta__ = PluginMetadata(
     name="eraTW Mirror",
@@ -28,30 +29,18 @@ __plugin_meta__ = PluginMetadata(
 
 service = MirrorService(plugin_config)
 register_archive_file_route(plugin_config)
+schedule_spec = parse_schedule(
+    plugin_config.eratw_schedule,
+    plugin_config.eratw_schedule_timezone,
+)
 
 logger.info(
     "eraTW mirror plugin loaded: "
     f"branch={plugin_config.eratw_branch}, "
-    f"poll_interval={plugin_config.eratw_poll_interval}, "
+    f"schedule={schedule_spec.description if schedule_spec else 'disabled'}, "
     f"groups={plugin_config.eratw_group_ids}, "
     f"proxy={'configured' if plugin_config.eratw_proxy else 'none'}"
 )
-
-if plugin_config.eratw_poll_interval > 0:
-    logger.info(
-        f"eraTW scheduler registered with interval {plugin_config.eratw_poll_interval} seconds"
-    )
-
-    @scheduler.scheduled_job(
-        "interval",
-        seconds=plugin_config.eratw_poll_interval,
-        id="eratw_mirror_poll",
-        max_instances=1,
-        coalesce=True,
-    )
-    async def _scheduled_check() -> None:
-        await run_scheduled_check()
-
 
 test_push = on_command(
     "eratw测试推送",
@@ -107,3 +96,17 @@ async def run_scheduled_check() -> None:
         service.mark_success(payload)
     except Exception:
         logger.exception("eraTW scheduled push failed")
+
+
+if schedule_spec is None:
+    logger.info("eraTW scheduled push disabled because eratw_schedule is empty")
+else:
+    scheduler.add_job(
+        run_scheduled_check,
+        schedule_spec.trigger,
+        id="eratw_mirror_schedule",
+        max_instances=1,
+        coalesce=True,
+        **schedule_spec.trigger_kwargs,
+    )
+    logger.info(f"eraTW scheduler registered: {schedule_spec.description}")

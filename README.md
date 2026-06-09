@@ -2,10 +2,10 @@
 
 GitGud eraTW 魔改仓库更新搬运插件。
 
-插件会定时轮询 GitGud 项目 `era-games-zh/touhou/eratw-sub-modding` 的指定分支：
+插件会按定时计划检查 GitGud 项目 `era-games-zh/touhou/eratw-sub-modding` 的指定分支：
 
 1. 比较当前 commit 和本地保存的 `last_success_sha`。
-2. 用 GitLab compare API 补齐轮询间隔内的所有 commit。
+2. 用 GitLab compare API 补齐两次推送间隔内的所有 commit。
 3. 下载当前 commit 的官方源码 zip 归档。
 4. 本地重新打包为仅存储、带密码、隐藏文件列表的 7z。
 5. 提取 `魔改版更新记录文档/补丁&readme集/ADD_BANQUET_开发日志.md` 在本次更新中的新增内容。
@@ -19,8 +19,12 @@ GitGud eraTW 魔改仓库更新搬运插件。
 # 自动推送群白名单。为空时不会自动推送。
 eratw_group_ids=[123456789]
 
-# 轮询间隔，单位秒。<=0 时关闭自动轮询。
-eratw_poll_interval=1800
+# 定时检查。留空时关闭自动推送。
+# daily@03:30: 每天 03:30
+# weekly@mon,thu@03:30: 每周一、周四 03:30
+# interval_days@2@03:30: 从下一个 03:30 开始，每 2 天一次
+eratw_schedule="daily@04:00"
+eratw_schedule_timezone="Asia/Shanghai"
 
 # 可选代理，例如 http://127.0.0.1:7890
 eratw_proxy=""

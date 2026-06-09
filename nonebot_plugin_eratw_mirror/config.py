@@ -11,7 +11,8 @@ class Config(BaseModel):
     eratw_branch: str = "main"
 
     eratw_group_ids: list[int] = Field(default_factory=list)
-    eratw_poll_interval: int = 1800
+    eratw_schedule: str = "daily@04:00"
+    eratw_schedule_timezone: str = "Asia/Shanghai"
     eratw_push_on_first_run: bool = False
 
     eratw_proxy: str | None = None
