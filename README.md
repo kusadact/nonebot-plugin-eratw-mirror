@@ -11,6 +11,23 @@ GitGud eraTW 魔改仓库更新搬运插件。
 5. 提取 `魔改版更新记录文档/补丁&readme集/ADD_BANQUET_开发日志.md` 在本次更新中的新增内容。
 6. 将 worker 下载地址交给 OneBot/NapCat 上传群文件，并发送合并转发消息。
 
+## 安装
+
+在 NoneBot 项目目录中安装插件：
+
+```bash
+uv add git+https://github.com/kusadact/nonebot-plugin-eratw-mirror.git
+```
+
+在 `pyproject.toml` 中加载插件：
+
+```toml
+[tool.nonebot]
+plugins = ["nonebot_plugin_eratw_mirror"]
+```
+
+本插件依赖 OneBot V11 适配器、`nonebot_plugin_apscheduler` 和 `nonebot_plugin_localstore`，通过上面的安装命令会自动安装 Python 依赖；NoneBot 仍需要按你的运行方式连接 OneBot/NapCat。
+
 ## 配置
 
 在 NoneBot `.env` 中配置：
@@ -90,18 +107,3 @@ worker 持久数据：
 `upload_group_file` 实际由 OneBot/NapCat 执行。worker 返回的 `download_url` 必须能被 NapCat 访问；如果 NapCat 和 worker 在同一台 Docker 主机上，可以让 `ERATW_WORKER_PUBLIC_BASE_URL` 指向 NapCat 容器可访问的主机地址。
 
 大文件上传时，OneBot API 调用会长时间不返回。插件默认用 `eratw_timeout=3600` 等待 Git 操作和 `upload_group_file`；同时建议在 `.env` 里填写 `API_TIMEOUT=3600`，否则 NoneBot 或适配器的全局 API 超时可能先断开，导致上传失败。
-
-## 开发
-
-本插件可以用 uv 管理依赖：
-
-```bash
-uv sync --group dev
-uv run pytest -q
-```
-
-如果只想做语法检查：
-
-```bash
-uv run python -m compileall src/nonebot_plugin_eratw_mirror tests
-```
