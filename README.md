@@ -17,11 +17,6 @@ GitGud eraTW 魔改仓库更新搬运插件。
 
 | 配置项 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `eratw_project_id` | 否 | `28180` | GitLab/GitGud 项目 ID，用于调用 API 获取 commit 和 diff。 |
-| `eratw_project_url` | 否 | `https://gitgud.io/era-games-zh/touhou/eratw-sub-modding` | 项目页面地址，也用于推导默认 Git 拉取地址。 |
-| `eratw_api_base` | 否 | `https://gitgud.io/api/v4` | GitLab API 基址。 |
-| `eratw_branch` | 否 | `main` | 检查和打包的分支。 |
-| `eratw_git_url` | 否 | 空 | 覆盖 Git 拉取地址；为空时使用 `eratw_project_url` 追加 `.git`。 |
 | `eratw_group_ids` | 否 | `[]` | 自动推送群白名单；为空时不会自动推送。 |
 | `eratw_schedule` | 否 | `daily@04:00` | 定时检查规则；留空关闭自动推送。支持 `daily@HH:MM`、`weekly@mon,thu@HH:MM`、`interval_days@2@HH:MM`。 |
 | `eratw_schedule_timezone` | 否 | `Asia/Shanghai` | 定时任务时区。 |
