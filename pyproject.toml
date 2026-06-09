@@ -3,7 +3,7 @@ name = "nonebot-plugin-eratw-mirror"
 version = "0.1.1"
 description = "Mirror GitGud eraTW updates to OneBot groups"
 authors = [
-    {name = "kusada"},
+    {name = "kusadact"},
 ]
 license = {text = "MIT"}
 dependencies = [
