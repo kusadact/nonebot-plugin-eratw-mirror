@@ -1,0 +1,95 @@
+from __future__ import annotations
+
+import inspect
+from pathlib import Path
+from typing import Any
+
+import httpx
+
+from .config import Config
+from .models import CommitInfo
+
+
+class GitGudClient:
+    def __init__(self, config: Config):
+        self.config = config
+        self._client: httpx.AsyncClient | None = None
+
+    async def __aenter__(self) -> "GitGudClient":
+        kwargs: dict[str, Any] = {
+            "timeout": httpx.Timeout(self.config.eratw_request_timeout),
+            "follow_redirects": True,
+        }
+        proxy = _normalize_proxy(self.config.eratw_proxy)
+        if proxy:
+            if "proxy" in inspect.signature(httpx.AsyncClient).parameters:
+                kwargs["proxy"] = proxy
+            else:
+                kwargs["proxies"] = proxy
+        self._client = httpx.AsyncClient(**kwargs)
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+        self._client = None
+
+    async def get_branch_head(self) -> CommitInfo:
+        data = await self._get_json(
+            f"/projects/{self.config.eratw_project_id}/repository/branches/{self.config.eratw_branch}"
+        )
+        return CommitInfo.from_api(data["commit"])
+
+    async def get_commit(self, sha: str) -> CommitInfo:
+        data = await self._get_json(
+            f"/projects/{self.config.eratw_project_id}/repository/commits/{sha}"
+        )
+        return CommitInfo.from_api(data)
+
+    async def compare(self, from_sha: str, to_sha: str) -> tuple[list[CommitInfo], list[dict[str, Any]]]:
+        data = await self._get_json(
+            f"/projects/{self.config.eratw_project_id}/repository/compare",
+            params={"from": from_sha, "to": to_sha, "straight": "true"},
+        )
+        commits = [CommitInfo.from_api(item) for item in data.get("commits", [])]
+        return commits, list(data.get("diffs", []))
+
+    async def get_commit_diffs(self, sha: str) -> list[dict[str, Any]]:
+        data = await self._get_json(
+            f"/projects/{self.config.eratw_project_id}/repository/commits/{sha}/diff",
+            params={"per_page": 100},
+        )
+        return list(data)
+
+    async def download_archive(self, sha: str, destination: Path) -> None:
+        client = self._require_client()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        url = self._url(f"/projects/{self.config.eratw_project_id}/repository/archive.zip")
+        async with client.stream("GET", url, params={"sha": sha}) as response:
+            response.raise_for_status()
+            with destination.open("wb") as file:
+                async for chunk in response.aiter_bytes():
+                    file.write(chunk)
+        if destination.stat().st_size <= 0:
+            raise RuntimeError(f"Downloaded archive is empty: {destination}")
+
+    async def _get_json(self, path: str, params: dict[str, Any] | None = None) -> Any:
+        response = await self._require_client().get(self._url(path), params=params)
+        response.raise_for_status()
+        return response.json()
+
+    def _url(self, path: str) -> str:
+        return f"{self.config.eratw_api_base.rstrip('/')}{path}"
+
+    def _require_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            raise RuntimeError("GitGudClient must be used as an async context manager")
+        return self._client
+
+
+def _normalize_proxy(proxy: str | None) -> str | None:
+    if proxy is None:
+        return None
+    proxy = proxy.strip()
+    return proxy or None
+
