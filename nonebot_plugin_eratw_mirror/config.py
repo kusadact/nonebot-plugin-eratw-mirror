@@ -20,15 +20,11 @@ class Config(BaseModel):
     eratw_request_timeout: float = 60.0
 
     eratw_archive_password: str = "eratoho"
-    eratw_git_depth: int = 1
-    eratw_git_timeout: float = 1800.0
+    eratw_timeout: float = 3600.0
     eratw_file_base_url: str | None = None
     eratw_file_route_prefix: str = "/eratw/files"
     eratw_file_token: str | None = None
-    eratw_upload_api_timeout: float | None = 3600.0
 
-    eratw_node_user_id: int = 2854196310
-    eratw_node_nickname: str = "eraTW 更新"
     eratw_command_priority: int = 10
     eratw_message_chunk_size: int = 1800
 

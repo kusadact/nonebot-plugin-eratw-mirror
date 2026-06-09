@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 from nonebot import logger
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageSegment
 
 from .config import Config
 from .file_server import build_archive_download_url
 from .models import UpdatePayload
+
+DEFAULT_NODE_USER_ID = 2854196310
 
 
 def build_forward_nodes(
@@ -66,13 +70,12 @@ async def send_payload_to_group(bot: Bot, group_id: int, payload: UpdatePayload,
         "group_id": int(group_id),
         "file": upload_source,
         "name": payload.archive.name,
+        "_timeout": config.eratw_timeout,
     }
-    if config.eratw_upload_api_timeout is not None:
-        api_params["_timeout"] = config.eratw_upload_api_timeout
-        logger.info(
-            f"eraTW upload_group_file API timeout for group {group_id}: "
-            f"{config.eratw_upload_api_timeout} seconds"
-        )
+    logger.info(
+        f"eraTW upload_group_file API timeout for group {group_id}: "
+        f"{config.eratw_timeout} seconds"
+    )
     await bot.call_api("upload_group_file", **api_params)
     logger.info(f"eraTW archive uploaded to group {group_id}: {payload.archive.name}")
     nodes = build_forward_nodes(payload, config, archive_uploaded=True)
@@ -112,10 +115,23 @@ def split_text(text: str, limit: int) -> list[str]:
 
 def _node(content: str, config: Config) -> MessageSegment:
     return MessageSegment.node_custom(
-        user_id=config.eratw_node_user_id,
-        nickname=config.eratw_node_nickname,
+        user_id=DEFAULT_NODE_USER_ID,
+        nickname=_repository_name(config),
         content=Message(content),
     )
+
+
+def _repository_name(config: Config) -> str:
+    source = (config.eratw_git_url or config.eratw_project_url).strip().rstrip("/")
+    if not source:
+        return "Git 更新"
+    path = urlparse(source).path or source
+    name = path.rsplit("/", 1)[-1]
+    if ":" in name:
+        name = name.rsplit(":", 1)[-1]
+    if name.endswith(".git"):
+        name = name[:-4]
+    return name or "Git 更新"
 
 
 def _archive_text(payload: UpdatePayload, *, archive_uploaded: bool) -> str:

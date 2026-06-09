@@ -15,48 +15,21 @@ GitGud eraTW 魔改仓库更新搬运插件。
 
 在 NoneBot `.env` 中配置：
 
-```bash
-# 自动推送群白名单。为空时不会自动推送。
-eratw_group_ids=[123456789]
-
-# 定时检查。留空时关闭自动推送。
-# daily@03:30: 每天 03:30
-# weekly@mon,thu@03:30: 每周一、周四 03:30
-# interval_days@2@03:30: 从下一个 03:30 开始，每 2 天一次
-eratw_schedule="daily@04:00"
-eratw_schedule_timezone="Asia/Shanghai"
-
-# 可选代理，例如 http://127.0.0.1:7890
-eratw_proxy=""
-
-# 7z 密码，默认 eratoho
-eratw_archive_password="eratoho"
-
-# Git 拉取深度。1 表示浅克隆/浅 fetch，<=0 表示完整历史。
-eratw_git_depth=1
-
-# Git 拉取/导出超时，单位秒。
-eratw_git_timeout=1800
-
-# 可选：覆盖 Git 拉取地址。默认由 eratw_project_url 自动追加 .git。
-eratw_git_url=""
-
-# 群文件上传使用的临时 HTTP 下载基址。
-# Bot 和 OneBot/NapCat 不在同一个文件系统时必须配置。
-# Docker compose 中 NapCat 与 NoneBot 同网络时常见写法：
-eratw_file_base_url="http://nonebot:8088"
-
-# 临时下载路由和 token。token 为空时插件每次启动自动生成。
-eratw_file_route_prefix="/eratw/files"
-eratw_file_token=""
-
-# 上传群文件 API 等待时间，单位秒。大文件建议 1800-7200。
-eratw_upload_api_timeout=3600
-
-# 合并转发节点展示 QQ 和昵称
-eratw_node_user_id=2854196310
-eratw_node_nickname="eraTW 更新"
-```
+| 配置项 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `eratw_project_id` | 否 | `28180` | GitLab/GitGud 项目 ID，用于调用 API 获取 commit 和 diff。 |
+| `eratw_project_url` | 否 | `https://gitgud.io/era-games-zh/touhou/eratw-sub-modding` | 项目页面地址，也用于推导默认 Git 拉取地址。 |
+| `eratw_api_base` | 否 | `https://gitgud.io/api/v4` | GitLab API 基址。 |
+| `eratw_branch` | 否 | `main` | 检查和打包的分支。 |
+| `eratw_git_url` | 否 | 空 | 覆盖 Git 拉取地址；为空时使用 `eratw_project_url` 追加 `.git`。 |
+| `eratw_group_ids` | 否 | `[]` | 自动推送群白名单；为空时不会自动推送。 |
+| `eratw_schedule` | 否 | `daily@04:00` | 定时检查规则；留空关闭自动推送。支持 `daily@HH:MM`、`weekly@mon,thu@HH:MM`、`interval_days@2@HH:MM`。 |
+| `eratw_schedule_timezone` | 否 | `Asia/Shanghai` | 定时任务时区。 |
+| `eratw_proxy` | 否 | 空 | GitGud API 和 Git 拉取使用的代理，例如 `http://127.0.0.1:7890`。 |
+| `eratw_archive_password` | 否 | `eratoho` | 生成 7z 压缩包时使用的密码。 |
+| `eratw_timeout` | 否 | `3600` | 超时时间，单位秒；用于 Git 拉取/导出和群文件上传 API 等长耗时操作。 |
+| `API_TIMEOUT` | 否 | `3600` | NoneBot/适配器全局 API 超时，建议与 `eratw_timeout` 保持一致。 |
+| `eratw_file_base_url` | 条件 | 空 | 群文件上传使用的临时 HTTP 下载基址；Bot 和 OneBot/NapCat 不在同一个文件系统时必须配置，例如 `http://nonebot:8088`。 |
 
 ## 指令
 
@@ -94,7 +67,7 @@ Git 拉取由 Python 依赖 `dulwich` 完成，7z 归档由 Python 依赖 `py7zr
 
 `upload_group_file` 实际由 OneBot 实现端执行。Bot 与 OneBot/NapCat 分容器部署时，OneBot 端无法读取 Bot 容器内的 `/workspace/...` 路径，需要配置 `eratw_file_base_url`，让 OneBot 通过 HTTP 下载插件生成的 7z。
 
-大文件上传时，OneBot API 调用会长时间不返回。插件默认把 `upload_group_file` 的等待时间设为 3600 秒；如果你的 NoneBot 或适配器仍然提前超时，也可以在 `.env` 里额外设置 `API_TIMEOUT=3600`。
+大文件上传时，OneBot API 调用会长时间不返回。插件默认用 `eratw_timeout=3600` 等待 Git 操作和 `upload_group_file`；同时建议在 `.env` 里设置 `API_TIMEOUT=3600`，避免 NoneBot 或适配器的全局 API 超时先断开。
 
 ## 开发
 

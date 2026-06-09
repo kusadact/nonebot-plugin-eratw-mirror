@@ -17,6 +17,7 @@ from .git_store import export_commit_tree, get_commit_tree_id, is_valid_git_repo
 from .models import ArchiveInfo
 
 T = TypeVar("T")
+GIT_FETCH_DEPTH = 1
 
 
 async def build_encrypted_archive(
@@ -98,7 +99,7 @@ def _clone_git_repo(git_url: str, repo_dir: Path, config: Config) -> None:
         target=str(repo_dir),
         bare=True,
         checkout=False,
-        depth=_git_depth(config),
+        depth=GIT_FETCH_DEPTH,
         branch=config.eratw_branch,
         errstream=_NullBinaryWriter(),
     )
@@ -108,7 +109,7 @@ def _clone_git_repo(git_url: str, repo_dir: Path, config: Config) -> None:
 async def _fetch_git_branch(repo_dir: Path, config: Config) -> None:
     logger.info(
         f"eraTW fetching git branch {config.eratw_branch} "
-        f"(depth={config.eratw_git_depth if config.eratw_git_depth > 0 else 'full'})"
+        f"(depth={GIT_FETCH_DEPTH})"
     )
     await _run_git_operation(
         f"fetch {config.eratw_branch}",
@@ -128,7 +129,7 @@ def _fetch_git_repo(repo_dir: Path, config: Config) -> None:
         porcelain.fetch(
             repo,
             remote_location=_git_url(config),
-            depth=_git_depth(config),
+            depth=GIT_FETCH_DEPTH,
             prune=True,
             force=True,
             quiet=True,
@@ -195,11 +196,11 @@ async def _run_git_operation(
     try:
         return await asyncio.wait_for(
             asyncio.to_thread(_run_with_git_env, config, func, *args, **kwargs),
-            timeout=config.eratw_git_timeout,
+            timeout=config.eratw_timeout,
         )
     except asyncio.TimeoutError:
         raise RuntimeError(
-            f"Git operation timed out after {config.eratw_git_timeout} seconds: {label}"
+            f"Git operation timed out after {config.eratw_timeout} seconds: {label}"
         ) from None
 
 
@@ -220,10 +221,6 @@ def _git_url(config: Config) -> str:
     if config.eratw_git_url and config.eratw_git_url.strip():
         return config.eratw_git_url.strip()
     return f"{config.eratw_project_url.rstrip('/')}.git"
-
-
-def _git_depth(config: Config) -> int | None:
-    return config.eratw_git_depth if config.eratw_git_depth > 0 else None
 
 
 def _apply_git_env(config: Config) -> dict[str, str | None]:
