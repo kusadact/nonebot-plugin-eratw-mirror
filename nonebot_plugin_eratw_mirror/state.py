@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from nonebot import logger
 from nonebot_plugin_localstore import get_plugin_data_dir
 
 from .models import UpdatePayload
@@ -18,7 +19,9 @@ class StateStore:
 
     def read_state(self) -> dict[str, Any]:
         if not self.state_path.exists():
+            logger.debug(f"eraTW state file does not exist yet: {self.state_path}")
             return {}
+        logger.debug(f"eraTW reading state file: {self.state_path}")
         return json.loads(self.state_path.read_text(encoding="utf-8"))
 
     def write_state(self, state: dict[str, Any]) -> None:
@@ -28,23 +31,31 @@ class StateStore:
         state = self.read_state()
         state["last_success_sha"] = sha
         state["last_push_time"] = pushed_at
+        logger.info(f"eraTW state last_success_sha updated to {sha[:8]}")
         self.write_state(state)
 
     def set_initial_sha(self, sha: str) -> None:
         state = self.read_state()
         state["last_success_sha"] = sha
+        logger.info(f"eraTW state initialized with sha {sha[:8]}")
         self.write_state(state)
 
     def read_last_payload(self) -> UpdatePayload | None:
         if not self.payload_path.exists():
+            logger.debug(f"eraTW payload cache does not exist yet: {self.payload_path}")
             return None
+        logger.debug(f"eraTW reading payload cache: {self.payload_path}")
         data = json.loads(self.payload_path.read_text(encoding="utf-8"))
         payload = UpdatePayload.from_json(data)
         if not payload.archive.path.exists():
+            logger.warning(
+                f"eraTW cached payload archive is missing; ignoring cache: {payload.archive.path}"
+            )
             return None
         return payload
 
     def write_last_payload(self, payload: UpdatePayload) -> None:
+        logger.info(f"eraTW writing payload cache for {payload.target_short_sha}: {self.payload_path}")
         self._write_json(self.payload_path, payload.to_json())
 
     @staticmethod
@@ -56,4 +67,3 @@ class StateStore:
             encoding="utf-8",
         )
         tmp_path.replace(path)
-

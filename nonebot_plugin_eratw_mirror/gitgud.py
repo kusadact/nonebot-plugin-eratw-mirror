@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from nonebot import logger
 
 from .config import Config
 from .models import CommitInfo
@@ -22,10 +23,13 @@ class GitGudClient:
         }
         proxy = _normalize_proxy(self.config.eratw_proxy)
         if proxy:
+            logger.info(f"eraTW GitGud client using proxy: {proxy}")
             if "proxy" in inspect.signature(httpx.AsyncClient).parameters:
                 kwargs["proxy"] = proxy
             else:
                 kwargs["proxies"] = proxy
+        else:
+            logger.debug("eraTW GitGud client using direct connection")
         self._client = httpx.AsyncClient(**kwargs)
         return self
 
@@ -35,36 +39,50 @@ class GitGudClient:
         self._client = None
 
     async def get_branch_head(self) -> CommitInfo:
+        logger.debug(f"eraTW fetching branch head: {self.config.eratw_branch}")
         data = await self._get_json(
             f"/projects/{self.config.eratw_project_id}/repository/branches/{self.config.eratw_branch}"
         )
-        return CommitInfo.from_api(data["commit"])
+        commit = CommitInfo.from_api(data["commit"])
+        logger.info(f"eraTW branch {self.config.eratw_branch} head: {commit.short_id} {commit.title}")
+        return commit
 
     async def get_commit(self, sha: str) -> CommitInfo:
+        logger.debug(f"eraTW fetching commit: {sha}")
         data = await self._get_json(
             f"/projects/{self.config.eratw_project_id}/repository/commits/{sha}"
         )
-        return CommitInfo.from_api(data)
+        commit = CommitInfo.from_api(data)
+        logger.info(f"eraTW fetched commit {commit.short_id}: {commit.title}")
+        return commit
 
     async def compare(self, from_sha: str, to_sha: str) -> tuple[list[CommitInfo], list[dict[str, Any]]]:
+        logger.info(f"eraTW comparing commits: {from_sha[:8]} -> {to_sha[:8]}")
         data = await self._get_json(
             f"/projects/{self.config.eratw_project_id}/repository/compare",
             params={"from": from_sha, "to": to_sha, "straight": "true"},
         )
         commits = [CommitInfo.from_api(item) for item in data.get("commits", [])]
+        logger.info(
+            f"eraTW compare result: {len(commits)} commits, "
+            f"{len(data.get('diffs', []))} diffs"
+        )
         return commits, list(data.get("diffs", []))
 
     async def get_commit_diffs(self, sha: str) -> list[dict[str, Any]]:
+        logger.debug(f"eraTW fetching commit diffs: {sha}")
         data = await self._get_json(
             f"/projects/{self.config.eratw_project_id}/repository/commits/{sha}/diff",
             params={"per_page": 100},
         )
+        logger.info(f"eraTW fetched {len(data)} diffs for commit {sha[:8]}")
         return list(data)
 
     async def download_archive(self, sha: str, destination: Path) -> None:
         client = self._require_client()
         destination.parent.mkdir(parents=True, exist_ok=True)
         url = self._url(f"/projects/{self.config.eratw_project_id}/repository/archive.zip")
+        logger.debug(f"eraTW archive download URL: {url}?sha={sha}")
         async with client.stream("GET", url, params={"sha": sha}) as response:
             response.raise_for_status()
             with destination.open("wb") as file:
@@ -92,4 +110,3 @@ def _normalize_proxy(proxy: str | None) -> str | None:
         return None
     proxy = proxy.strip()
     return proxy or None
-

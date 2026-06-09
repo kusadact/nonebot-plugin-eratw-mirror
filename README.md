@@ -58,3 +58,21 @@ eratw_node_nickname="eraTW 更新"
 
 压缩包会先作为群文件上传。合并转发中的压缩包节点包含文件名、大小、SHA256 和密码。
 
+## 部署注意
+
+运行插件的环境需要有 `7zz`、`7z` 或 `7za`。如果 Bot 跑在 Docker 里，需要在镜像中安装 p7zip/7zip，或者把 `eratw_7z_path` 配置为容器内可执行文件路径。
+
+## 开发
+
+本插件可以用 uv 管理依赖：
+
+```bash
+uv sync --group dev
+uv run pytest -q
+```
+
+如果只想做语法检查：
+
+```bash
+uv run python -m compileall nonebot_plugin_eratw_mirror tests
+```
