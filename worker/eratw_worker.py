@@ -3,10 +3,12 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import shutil
 import stat
+import sys
 from threading import Lock
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
@@ -64,6 +66,13 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:
             self.log_error("build failed: %s", exc)
             self._send_json({"error": str(exc)}, status=500)
+
+    def log_message(self, format: str, *args: object) -> None:
+        message = format % tuple(_redact_log_value(str(arg)) for arg in args)
+        sys.stderr.write(
+            "%s - - [%s] %s\n"
+            % (self.address_string(), self.log_date_time_string(), message)
+        )
 
     def _serve_file(self, raw_path: str, query: dict[str, list[str]]) -> None:
         if CONFIG.token and (query.get("token") or [""])[0] != CONFIG.token:
@@ -307,6 +316,10 @@ def _clean_short_sha(value: str) -> str:
 
 def _safe_name(value: str) -> bool:
     return bool(value) and all(char.isalnum() or char in {"-", "_", "."} for char in value)
+
+
+def _redact_log_value(value: str) -> str:
+    return re.sub(r"([?&]token=)[^\\s&\"]+", r"\\1<redacted>", value)
 
 
 def _git_depth(depth: int) -> int | None:
