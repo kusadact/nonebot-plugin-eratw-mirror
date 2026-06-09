@@ -31,6 +31,7 @@ class StateStore:
         state = self.read_state()
         state["last_success_sha"] = sha
         state["last_push_time"] = pushed_at
+        state.pop("group_push_success", None)
         logger.info(f"eraTW state last_success_sha updated to {sha[:8]}")
         self.write_state(state)
 
@@ -66,6 +67,37 @@ class StateStore:
     def write_last_payload(self, payload: UpdatePayload) -> None:
         logger.info(f"eraTW writing payload cache for {payload.target_short_sha}: {self.payload_path}")
         self._write_json(self.payload_path, payload.to_json())
+
+    def read_successful_groups(self, sha: str) -> set[int]:
+        data = self.read_state().get("group_push_success")
+        if not isinstance(data, dict) or data.get("sha") != sha:
+            return set()
+        groups = data.get("groups")
+        if not isinstance(groups, list):
+            return set()
+        result: set[int] = set()
+        for group_id in groups:
+            try:
+                result.add(int(group_id))
+            except (TypeError, ValueError):
+                continue
+        return result
+
+    def add_successful_group(self, sha: str, group_id: int) -> None:
+        state = self.read_state()
+        data = state.get("group_push_success")
+        if not isinstance(data, dict) or data.get("sha") != sha:
+            data = {"sha": sha, "groups": []}
+        groups = data.get("groups")
+        if not isinstance(groups, list):
+            groups = []
+        group_text = str(int(group_id))
+        if group_text not in {str(item) for item in groups}:
+            groups.append(group_text)
+        data["groups"] = groups
+        state["group_push_success"] = data
+        logger.info(f"eraTW recorded successful group push for {sha[:8]}: {group_id}")
+        self.write_state(state)
 
     @staticmethod
     def _write_json(path: Path, data: dict[str, Any]) -> None:

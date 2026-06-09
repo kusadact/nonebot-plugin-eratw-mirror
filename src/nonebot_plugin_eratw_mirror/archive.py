@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import os
 import shutil
 from pathlib import Path
@@ -18,6 +19,7 @@ from .models import ArchiveInfo
 
 T = TypeVar("T")
 GIT_FETCH_DEPTH = 1
+ARCHIVE_CACHE_VERSION = 1
 
 
 async def build_encrypted_archive(
@@ -30,18 +32,34 @@ async def build_encrypted_archive(
     output_dir = data_dir / "archives"
 
     archive_path = output_dir / f"eratw-sub-modding-{short_sha}.7z"
+    metadata_path = _archive_metadata_path(archive_path)
 
-    if archive_path.exists() and archive_path.stat().st_size > 0:
+    cached_archive = _cached_archive_info(archive_path, metadata_path, sha, config)
+    if cached_archive is not None:
         logger.info(f"eraTW archive cache hit: {archive_path}")
-        return _archive_info(archive_path, config.eratw_archive_password)
+        return cached_archive
 
     output_dir.mkdir(parents=True, exist_ok=True)
     source = await _prepare_git_source(sha, short_sha, config, work_dir)
-    if archive_path.exists():
-        archive_path.unlink()
+    tmp_archive = _archive_tmp_path(archive_path)
+    if tmp_archive.exists():
+        tmp_archive.unlink()
     logger.info(f"eraTW building encrypted 7z archive for {short_sha}: {archive_path}")
-    await _run_7z(source, archive_path, config)
-    archive_info = _archive_info(archive_path, config.eratw_archive_password)
+    try:
+        await _run_7z(source, tmp_archive, config)
+        tmp_archive_info = _archive_info(tmp_archive, config.eratw_archive_password)
+        tmp_archive.replace(archive_path)
+    finally:
+        if tmp_archive.exists():
+            tmp_archive.unlink()
+    archive_info = ArchiveInfo(
+        path=archive_path,
+        name=archive_path.name,
+        size=tmp_archive_info.size,
+        sha256=tmp_archive_info.sha256,
+        password=tmp_archive_info.password,
+    )
+    _write_archive_metadata(metadata_path, sha, config, archive_info)
     logger.info(
         f"eraTW built archive {archive_info.name}: "
         f"{archive_info.size / 1024 / 1024:.2f} MiB, sha256={archive_info.sha256}"
@@ -268,9 +286,87 @@ def _archive_info(path: Path, password: str) -> ArchiveInfo:
     )
 
 
+def _cached_archive_info(
+    archive_path: Path,
+    metadata_path: Path,
+    sha: str,
+    config: Config,
+) -> ArchiveInfo | None:
+    if not archive_path.exists() or archive_path.stat().st_size <= 0:
+        return None
+    metadata = _read_archive_metadata(metadata_path)
+    if metadata is None:
+        logger.info(f"eraTW archive cache metadata missing; rebuilding: {archive_path}")
+        return None
+    expected = _archive_cache_key(sha, config)
+    for key, value in expected.items():
+        if metadata.get(key) != value:
+            logger.info(f"eraTW archive cache metadata mismatch on {key}; rebuilding: {archive_path}")
+            return None
+    archive_info = _archive_info(archive_path, config.eratw_archive_password)
+    if int(metadata.get("archive_size") or -1) != archive_info.size:
+        logger.info(f"eraTW archive cache size mismatch; rebuilding: {archive_path}")
+        return None
+    if str(metadata.get("archive_sha256") or "") != archive_info.sha256:
+        logger.info(f"eraTW archive cache sha256 mismatch; rebuilding: {archive_path}")
+        return None
+    return archive_info
+
+
+def _archive_cache_key(sha: str, config: Config) -> dict[str, object]:
+    return {
+        "version": ARCHIVE_CACHE_VERSION,
+        "commit_sha": sha,
+        "git_url": _git_url(config),
+        "branch": config.eratw_branch,
+        "password_sha256": _text_sha256(config.eratw_archive_password),
+    }
+
+
+def _read_archive_metadata(path: Path) -> dict[str, object] | None:
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning(f"eraTW archive cache metadata is unreadable; rebuilding: {path}: {exc}")
+        return None
+    if not isinstance(data, dict):
+        logger.warning(f"eraTW archive cache metadata is invalid; rebuilding: {path}")
+        return None
+    return data
+
+
+def _write_archive_metadata(path: Path, sha: str, config: Config, archive_info: ArchiveInfo) -> None:
+    data = {
+        **_archive_cache_key(sha, config),
+        "archive_name": archive_info.name,
+        "archive_size": archive_info.size,
+        "archive_sha256": archive_info.sha256,
+    }
+    tmp_path = path.with_suffix(f"{path.suffix}.tmp")
+    tmp_path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    tmp_path.replace(path)
+
+
+def _archive_metadata_path(path: Path) -> Path:
+    return path.with_suffix(f"{path.suffix}.json")
+
+
+def _archive_tmp_path(path: Path) -> Path:
+    return path.with_suffix(f"{path.suffix}.tmp")
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as file:
         for chunk in iter(lambda: file.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _text_sha256(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()

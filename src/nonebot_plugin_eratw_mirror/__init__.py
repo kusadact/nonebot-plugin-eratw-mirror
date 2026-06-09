@@ -89,10 +89,32 @@ async def run_scheduled_check() -> None:
             f"eraTW scheduled payload ready for {payload.target_short_sha}; "
             f"pushing to {len(plugin_config.eratw_group_ids)} groups"
         )
-        for group_id in plugin_config.eratw_group_ids:
+        target_groups = [int(group_id) for group_id in plugin_config.eratw_group_ids]
+        successful_groups = service.successful_groups(payload)
+        pending_groups = [group_id for group_id in target_groups if group_id not in successful_groups]
+        if not pending_groups:
+            logger.info(
+                f"eraTW all groups already received {payload.target_short_sha}; marking success"
+            )
+            service.mark_success(payload)
+            return
+        failed_groups: list[int] = []
+        for group_id in pending_groups:
             logger.info(f"eraTW scheduled push started for group {group_id}")
-            await send_payload_to_group(bot, int(group_id), payload, plugin_config)
+            try:
+                await send_payload_to_group(bot, group_id, payload, plugin_config)
+            except Exception:
+                failed_groups.append(group_id)
+                logger.exception(f"eraTW scheduled push failed for group {group_id}")
+                continue
+            service.mark_group_success(payload, group_id)
             logger.info(f"eraTW scheduled push completed for group {group_id}")
+        if failed_groups:
+            logger.warning(
+                f"eraTW scheduled push left {len(failed_groups)} failed groups for retry: "
+                f"{failed_groups}"
+            )
+            return
         service.mark_success(payload)
     except Exception:
         logger.exception("eraTW scheduled push failed")
