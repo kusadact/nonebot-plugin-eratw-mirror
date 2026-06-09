@@ -10,6 +10,7 @@ import pytest
 def _load_schedule_module():
     path = (
         Path(__file__).resolve().parents[1]
+        / "src"
         / "nonebot_plugin_eratw_mirror"
         / "schedule.py"
     )

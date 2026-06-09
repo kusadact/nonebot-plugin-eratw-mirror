@@ -88,5 +88,5 @@ uv run pytest -q
 如果只想做语法检查：
 
 ```bash
-uv run python -m compileall nonebot_plugin_eratw_mirror tests
+uv run python -m compileall src/nonebot_plugin_eratw_mirror tests
 ```

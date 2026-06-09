@@ -11,6 +11,7 @@ from dulwich import porcelain
 def _load_archive_module():
     path = (
         Path(__file__).resolve().parents[1]
+        / "src"
         / "nonebot_plugin_eratw_mirror"
         / "git_store.py"
     )

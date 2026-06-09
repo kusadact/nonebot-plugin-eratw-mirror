@@ -1,6 +1,6 @@
 [project]
 name = "nonebot-plugin-eratw-mirror"
-version = "0.1.0"
+version = "0.1.1"
 description = "Mirror GitGud eraTW updates to OneBot groups"
 authors = [
     {name = "kusada"},
@@ -24,8 +24,16 @@ dev = [
 ]
 
 [build-system]
-requires = ["pdm-pep517>=0.12.0"]
-build-backend = "pdm.pep517.api"
+requires = ["uv_build>=0.11.0,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+required-version = ">=0.11.0"
+default-groups = ["dev"]
+
+[tool.uv.build-backend]
+module-name = "nonebot_plugin_eratw_mirror"
+module-root = "src"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

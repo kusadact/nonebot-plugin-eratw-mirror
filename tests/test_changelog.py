@@ -7,6 +7,7 @@ from pathlib import Path
 def _load_changelog_module():
     path = (
         Path(__file__).resolve().parents[1]
+        / "src"
         / "nonebot_plugin_eratw_mirror"
         / "changelog.py"
     )
@@ -29,4 +30,3 @@ def test_extract_added_markdown_ignores_headers():
 +++ new
 """
     assert changelog.extract_added_markdown_from_diff(diff) == "## v1\n\n- added"
-
