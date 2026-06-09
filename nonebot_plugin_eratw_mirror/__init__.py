@@ -44,7 +44,6 @@ if plugin_config.eratw_poll_interval > 0:
         "interval",
         seconds=plugin_config.eratw_poll_interval,
         id="eratw_mirror_poll",
-        replace_existing=True,
         max_instances=1,
         coalesce=True,
     )
