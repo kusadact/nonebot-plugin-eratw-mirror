@@ -77,3 +77,9 @@ eratw_file_base_url="http://nonebot:8088"
 ## 部署注意
 
 大文件上传时，OneBot API 调用会长时间不返回。插件默认用 `eratw_timeout=3600` 等待 Git 操作和 `upload_group_file`；同时建议在 `.env` 里填写 `API_TIMEOUT=3600`，否则 NoneBot 或适配器的全局 API 超时可能先断开，导致上传失败。
+
+## 使用
+
+<img src="./.docs/usage-push.jpeg" width="420" alt="测试推送与群文件上传">
+
+<img src="./.docs/usage-forward.png" width="420" alt="合并转发消息内容">
