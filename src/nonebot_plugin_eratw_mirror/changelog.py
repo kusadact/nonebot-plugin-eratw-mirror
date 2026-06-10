@@ -4,12 +4,48 @@ TARGET_CHANGELOG_PATH = "魔改版更新记录文档/补丁&readme集/ADD_BANQUE
 
 
 def extract_added_markdown_from_diff(diff_text: str) -> str:
-    lines: list[str] = []
+    chunks: list[str] = []
+    hunk_lines: list[tuple[str, str]] = []
+    has_addition = False
+    has_removal = False
+
+    def flush_hunk() -> None:
+        nonlocal has_addition, has_removal
+        if not has_addition:
+            hunk_lines.clear()
+            has_removal = False
+            return
+        selected = [
+            text
+            for kind, text in hunk_lines
+            if kind == "added" or (has_removal and kind == "context")
+        ]
+        text = _strip_outer_blank_lines("\n".join(selected))
+        if text:
+            chunks.append(text)
+        hunk_lines.clear()
+        has_addition = False
+        has_removal = False
+
     for line in diff_text.splitlines():
-        if not line.startswith("+") or line.startswith("+++"):
+        if line.startswith("@@"):
+            flush_hunk()
             continue
-        lines.append(line[1:])
-    return _strip_outer_blank_lines("\n".join(lines))
+        if line.startswith("+++") or line.startswith("---") or line.startswith("\\"):
+            continue
+        if line.startswith("+"):
+            hunk_lines.append(("added", line[1:]))
+            has_addition = True
+            continue
+        if line.startswith("-"):
+            has_removal = True
+            continue
+        if line.startswith(" "):
+            hunk_lines.append(("context", line[1:]))
+            continue
+        hunk_lines.append(("context", line))
+    flush_hunk()
+    return _strip_outer_blank_lines("\n\n".join(chunks))
 
 
 def extract_changelog_from_diffs(diffs: list[dict]) -> str:
@@ -32,4 +68,3 @@ def _strip_outer_blank_lines(text: str) -> str:
     while lines and not lines[-1].strip():
         lines.pop()
     return "\n".join(lines)
-

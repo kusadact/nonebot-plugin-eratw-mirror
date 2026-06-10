@@ -26,6 +26,7 @@ class Config(BaseModel):
     eratw_file_base_url: str | None = None
     eratw_file_route_prefix: str = "/eratw/files"
     eratw_file_token: str | None = None
+    eratw_file_token_ttl: int = 3600
 
     eratw_command_priority: int = 10
     eratw_message_chunk_size: int = 1800
