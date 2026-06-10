@@ -1,8 +1,15 @@
-# nonebot-plugin-eratw-mirror
+<div align="center">
+  <a href="https://v2.nonebot.dev/store">
+    <img src="https://raw.githubusercontent.com/fllesser/nonebot-plugin-template/refs/heads/resource/.docs/NoneBotPlugin.svg" width="310" alt="logo">
+  </a>
+
+## ✨ nonebot-plugin-eratw-mirror ✨
+
+</div>
 
 GitGud eraTW 魔改仓库更新搬运插件。
 
-插件会按定时计划检查 GitGud 项目 `era-games-zh/touhou/eratw-sub-modding` 的指定分支：
+插件会按定时计划检查 GitGud 项目 `era-games-zh/touhou/eratw-sub-modding` 的主仓库：
 
 1. 比较当前 commit 和本地保存的 `last_success_sha`。
 2. 用 GitLab compare API 补齐两次推送间隔内的所有 commit。
@@ -13,16 +20,16 @@ GitGud eraTW 魔改仓库更新搬运插件。
 
 ## 分支选择
 
-主分支适合 Bot 服务器自己完成 Git 拉取、源码导出、7z 打包和临时文件下载服务。也就是说，Git 缓存和归档文件都保存在 Bot 进程使用的 localstore data/cache 目录中；如果 Bot 和 OneBot/NapCat 分容器部署，需要配置 `eratw_file_base_url` 让 OneBot 端能下载 Bot 生成的压缩包。
+主分支适合由 Bot 服务器本地完成拉取源码和打包压缩的部署方式。
 
-如果希望把 Git 拉取和 7z 打包放到另一台机器或容器上，可以使用 [worker 分支](https://github.com/kusadact/nonebot-plugin-eratw-mirror/tree/feat/pack-worker)。worker 分支保留 Bot 端的更新检查、消息发送和群文件上传流程，但压缩包由独立 Python worker 服务生成并通过 worker URL 提供下载。它适合 Bot 服务器磁盘/CPU/网络不适合打包、worker 服务器需要单独代理地址，或 NapCat 更容易访问 worker 下载地址的部署方式。
+如果你希望把拉取源码、打包压缩放到另一台机器或容器上，可以使用 [worker 分支](https://github.com/kusadact/nonebot-plugin-eratw-mirror/tree/feat/pack-worker)。
 
 ## 安装
 
 在 NoneBot 项目目录中安装插件：
 
 ```bash
-uv add git+https://github.com/kusadact/nonebot-plugin-eratw-mirror.git
+uv add git+https://github.com/kusadact/nonebot-plugin-eratw-mirror.git --branch main
 ```
 
 在 `pyproject.toml` 中加载插件：
@@ -31,8 +38,6 @@ uv add git+https://github.com/kusadact/nonebot-plugin-eratw-mirror.git
 [tool.nonebot]
 plugins = ["nonebot_plugin_eratw_mirror"]
 ```
-
-本插件依赖 OneBot V11 适配器、`nonebot_plugin_apscheduler` 和 `nonebot_plugin_localstore`，通过上面的安装命令会自动安装 Python 依赖；NoneBot 仍需要按你的运行方式连接 OneBot/NapCat。
 
 ## 配置
 
@@ -54,7 +59,7 @@ plugins = ["nonebot_plugin_eratw_mirror"]
 ```dotenv
 eratw_group_ids=[123456789, 987654321]
 eratw_schedule="daily@04:00"
-eratw_proxy=""
+eratw_proxy="http://your.proxy.address:port"
 eratw_archive_password="eratoho"
 eratw_timeout=3600
 API_TIMEOUT=3600
@@ -67,34 +72,8 @@ eratw_file_base_url="http://nonebot:8088"
 /eratw测试推送
 ```
 
-仅限 SuperUser。优先重发最近一次已生成的推送；如果没有历史推送，就拉取最新 commit，生成压缩包，并发送测试合并转发消息。测试命令不会更新 `last_success_sha`。
-
-## 消息结构
-
-合并转发消息按如下节点构造：
-
-```text
-消息1: commit 标题 1
-消息2: commit 标题 2
-...
-消息x: 加密压缩包信息
-消息x+1: 本次更新的开发日志
-```
-
-压缩包会先作为群文件上传。合并转发中的压缩包节点包含文件名、大小、SHA256 和密码。
+仅限 SuperUser 使用。优先重发最近一次已生成的推送；如果没有历史推送，就拉取最新 commit，生成压缩包，并发送测试合并转发消息。测试命令不会更新 `last_success_sha`。
 
 ## 部署注意
-
-Git 拉取由 Python 依赖 `dulwich` 完成，7z 归档由 Python 依赖 `py7zr` 生成，不需要额外安装系统 `git`、`7zz`、`7z` 或 `7za`。
-
-插件会把持久数据放在 NoneBot localstore 的 data 目录下，例如 Docker 环境里的 `/workspace/data/nonebot_plugin_eratw_mirror/`：
-
-- `git/source.git`: 本地裸 Git 缓存，用于后续增量 fetch。
-- `archives/*.7z`: 已生成的加密 7z 归档。
-- `state.json`、`last_payload.json`: 推送状态和最近一次推送缓存。
-
-临时导出的源码工作目录放在 localstore cache 目录的 `work/<sha>/`，打包完成后可安全清理。
-
-`upload_group_file` 实际由 OneBot 实现端执行。Bot 与 OneBot/NapCat 分容器部署时，OneBot 端无法读取 Bot 容器内的 `/workspace/...` 路径，需要配置 `eratw_file_base_url`，让 OneBot 通过 HTTP 下载插件生成的 7z。
 
 大文件上传时，OneBot API 调用会长时间不返回。插件默认用 `eratw_timeout=3600` 等待 Git 操作和 `upload_group_file`；同时建议在 `.env` 里填写 `API_TIMEOUT=3600`，否则 NoneBot 或适配器的全局 API 超时可能先断开，导致上传失败。
