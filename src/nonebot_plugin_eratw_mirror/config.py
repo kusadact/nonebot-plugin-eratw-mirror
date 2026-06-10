@@ -21,6 +21,8 @@ class Config(BaseModel):
 
     eratw_archive_password: str = "eratoho"
     eratw_timeout: float = 3600.0
+    eratw_git_retries: int = 5
+    eratw_git_retry_delay: float = 3.0
     eratw_file_base_url: str | None = None
     eratw_file_route_prefix: str = "/eratw/files"
     eratw_file_token: str | None = None

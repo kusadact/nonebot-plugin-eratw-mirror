@@ -76,9 +76,7 @@ async def _prepare_git_source(
     repo_dir = get_plugin_data_dir() / "git" / "source.git"
     source = work_dir / f"eratw-sub-modding-{short_sha}"
 
-    await _ensure_git_repo(repo_dir, config)
-    await _fetch_git_branch(repo_dir, config)
-    await _verify_git_commit(repo_dir, sha, config)
+    await _sync_git_repo(repo_dir, sha, config)
 
     if work_dir.exists():
         logger.debug(f"eraTW removing previous work directory: {work_dir}")
@@ -87,6 +85,61 @@ async def _prepare_git_source(
     logger.info(f"eraTW checking out source {short_sha} from git cache to {source}")
     await _checkout_git_worktree(repo_dir, source, sha, config)
     return source
+
+
+async def _sync_git_repo(repo_dir: Path, sha: str, config: Config) -> None:
+    await _run_git_step(
+        f"git clone {_git_url(config)}",
+        repo_dir,
+        config,
+        _ensure_git_repo,
+        repo_dir,
+        config,
+    )
+    await _run_git_step(
+        f"git fetch {config.eratw_branch}",
+        repo_dir,
+        config,
+        _fetch_git_branch,
+        repo_dir,
+        config,
+    )
+    await _run_git_step(
+        f"git verify {sha[:8]}",
+        repo_dir,
+        config,
+        _verify_git_commit,
+        repo_dir,
+        sha,
+        config,
+    )
+
+
+async def _run_git_step(
+    label: str,
+    repo_dir: Path,
+    config: Config,
+    func: Callable[..., T],
+    *args: object,
+    **kwargs: object,
+) -> T:
+    attempts = max(1, config.eratw_git_retries)
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return await func(*args, **kwargs)
+        except Exception as exc:
+            last_error = exc
+            _remove_invalid_git_repo(repo_dir)
+            if attempt >= attempts:
+                break
+            delay = _git_retry_delay(config, attempt)
+            logger.warning(
+                f"eraTW {label} failed on attempt {attempt}/{attempts}: {exc}; "
+                f"retrying in {delay:.1f}s"
+            )
+            await asyncio.sleep(delay)
+    raise RuntimeError(f"{label} failed after {attempts} attempts: {last_error}") from last_error
 
 
 async def _ensure_git_repo(repo_dir: Path, config: Config) -> None:
@@ -233,6 +286,16 @@ def _run_with_git_env(
         return func(*args, **kwargs)
     finally:
         _restore_env(previous)
+
+
+def _remove_invalid_git_repo(repo_dir: Path) -> None:
+    if repo_dir.exists() and not is_valid_git_repo(repo_dir):
+        logger.warning(f"eraTW git cache became invalid; rebuilding: {repo_dir}")
+        shutil.rmtree(repo_dir)
+
+
+def _git_retry_delay(config: Config, failed_attempt: int) -> float:
+    return max(0.0, config.eratw_git_retry_delay) * (2 ** max(0, failed_attempt - 1))
 
 
 def _git_url(config: Config) -> str:

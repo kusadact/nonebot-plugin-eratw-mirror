@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import sys
 import types
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 
 def _load_archive_module():
@@ -54,6 +57,8 @@ def _config(password: str = "eratoho"):
         eratw_branch="main",
         eratw_git_url=None,
         eratw_project_url="https://gitgud.io/era-games-zh/touhou/eratw-sub-modding",
+        eratw_git_retries=5,
+        eratw_git_retry_delay=1.0,
     )
 
 
@@ -101,3 +106,74 @@ def test_archive_cache_accepts_matching_metadata(tmp_path: Path):
     assert cached is not None
     assert cached.password == "same-pass"
     assert cached.sha256 == info.sha256
+
+
+def test_sync_git_repo_retries_each_git_step(tmp_path: Path, monkeypatch):
+    archive = _load_archive_module()
+    config = _config()
+    clone_attempts = 0
+    fetch_attempts = 0
+    sleeps: list[float] = []
+
+    async def fake_sleep(delay: float):
+        sleeps.append(delay)
+
+    async def flaky_clone(*args):
+        nonlocal clone_attempts
+        clone_attempts += 1
+        if clone_attempts < 2:
+            raise OSError("connection broken during clone")
+
+    async def flaky_fetch(*args):
+        nonlocal fetch_attempts
+        fetch_attempts += 1
+        if fetch_attempts < 3:
+            raise OSError("connection broken during fetch")
+
+    async def verify_ok(*args):
+        return None
+
+    monkeypatch.setattr(archive.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(archive, "_ensure_git_repo", flaky_clone)
+    monkeypatch.setattr(archive, "_fetch_git_branch", flaky_fetch)
+    monkeypatch.setattr(archive, "_verify_git_commit", verify_ok)
+    monkeypatch.setattr(archive, "_remove_invalid_git_repo", lambda *args: None)
+
+    asyncio.run(archive._sync_git_repo(tmp_path / "repo.git", "abc123", config))
+
+    assert clone_attempts == 2
+    assert fetch_attempts == 3
+    assert sleeps == [1.0, 1.0, 2.0]
+
+
+def test_sync_git_repo_reports_final_retry_failure(tmp_path: Path, monkeypatch):
+    archive = _load_archive_module()
+    config = _config()
+    config.eratw_git_retries = 3
+    config.eratw_git_retry_delay = 0.0
+    fetch_attempts = 0
+
+    async def fake_sleep(delay: float):
+        return None
+
+    async def broken_fetch(*args):
+        nonlocal fetch_attempts
+        fetch_attempts += 1
+        raise OSError("connection broken")
+
+    async def ensure_ok(*args):
+        return None
+
+    async def verify_ok(*args):
+        return None
+
+    monkeypatch.setattr(archive.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(archive, "_ensure_git_repo", ensure_ok)
+    monkeypatch.setattr(archive, "_fetch_git_branch", broken_fetch)
+    monkeypatch.setattr(archive, "_verify_git_commit", verify_ok)
+    monkeypatch.setattr(archive, "_remove_invalid_git_repo", lambda *args: None)
+
+    with pytest.raises(RuntimeError, match="git fetch main failed after 3 attempts"):
+        asyncio.run(archive._sync_git_repo(tmp_path / "repo.git", "abc123", config))
+
+    assert fetch_attempts == 3
