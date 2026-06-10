@@ -31,6 +31,7 @@ class StateStore:
         state = self.read_state()
         state["last_success_sha"] = sha
         state["last_push_time"] = pushed_at
+        state.pop("group_upload_success", None)
         state.pop("group_push_success", None)
         logger.info(f"eraTW state last_success_sha updated to {sha[:8]}")
         self.write_state(state)
@@ -69,7 +70,21 @@ class StateStore:
         self._write_json(self.payload_path, payload.to_json())
 
     def read_successful_groups(self, sha: str) -> set[int]:
-        data = self.read_state().get("group_push_success")
+        return self._read_group_state("group_push_success", sha)
+
+    def read_uploaded_groups(self, sha: str) -> set[int]:
+        return self._read_group_state("group_upload_success", sha)
+
+    def add_successful_group(self, sha: str, group_id: int) -> None:
+        self._add_group_state("group_push_success", sha, group_id)
+        logger.info(f"eraTW recorded successful group push for {sha[:8]}: {group_id}")
+
+    def add_uploaded_group(self, sha: str, group_id: int) -> None:
+        self._add_group_state("group_upload_success", sha, group_id)
+        logger.info(f"eraTW recorded successful group archive upload for {sha[:8]}: {group_id}")
+
+    def _read_group_state(self, key: str, sha: str) -> set[int]:
+        data = self.read_state().get(key)
         if not isinstance(data, dict) or data.get("sha") != sha:
             return set()
         groups = data.get("groups")
@@ -83,9 +98,9 @@ class StateStore:
                 continue
         return result
 
-    def add_successful_group(self, sha: str, group_id: int) -> None:
+    def _add_group_state(self, key: str, sha: str, group_id: int) -> None:
         state = self.read_state()
-        data = state.get("group_push_success")
+        data = state.get(key)
         if not isinstance(data, dict) or data.get("sha") != sha:
             data = {"sha": sha, "groups": []}
         groups = data.get("groups")
@@ -95,8 +110,7 @@ class StateStore:
         if group_text not in {str(item) for item in groups}:
             groups.append(group_text)
         data["groups"] = groups
-        state["group_push_success"] = data
-        logger.info(f"eraTW recorded successful group push for {sha[:8]}: {group_id}")
+        state[key] = data
         self.write_state(state)
 
     @staticmethod

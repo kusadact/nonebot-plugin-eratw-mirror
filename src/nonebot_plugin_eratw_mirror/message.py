@@ -49,7 +49,12 @@ def build_forward_nodes(
     return nodes
 
 
-async def send_payload_to_group(bot: Bot, group_id: int, payload: UpdatePayload, config: Config) -> None:
+async def upload_payload_archive_to_group(
+    bot: Bot,
+    group_id: int,
+    payload: UpdatePayload,
+    config: Config,
+) -> None:
     upload_source = build_archive_download_url(payload.archive.path, config)
     if upload_source:
         logger.info(
@@ -78,10 +83,31 @@ async def send_payload_to_group(bot: Bot, group_id: int, payload: UpdatePayload,
     )
     await bot.call_api("upload_group_file", **api_params)
     logger.info(f"eraTW archive uploaded to group {group_id}: {payload.archive.name}")
-    nodes = build_forward_nodes(payload, config, archive_uploaded=True)
+
+
+async def send_payload_forward_to_group(
+    bot: Bot,
+    group_id: int,
+    payload: UpdatePayload,
+    config: Config,
+    *,
+    archive_uploaded: bool,
+) -> None:
+    nodes = build_forward_nodes(payload, config, archive_uploaded=archive_uploaded)
     logger.info(f"eraTW sending forward message to group {group_id}: {len(nodes)} nodes")
     await bot.send_group_forward_msg(group_id=int(group_id), messages=nodes)
     logger.info(f"eraTW forward message sent to group {group_id}")
+
+
+async def send_payload_to_group(bot: Bot, group_id: int, payload: UpdatePayload, config: Config) -> None:
+    await upload_payload_archive_to_group(bot, group_id, payload, config)
+    await send_payload_forward_to_group(
+        bot,
+        group_id,
+        payload,
+        config,
+        archive_uploaded=True,
+    )
 
 
 async def send_payload_to_private(bot: Bot, user_id: int, payload: UpdatePayload, config: Config) -> None:

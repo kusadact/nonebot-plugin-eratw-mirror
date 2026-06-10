@@ -12,12 +12,15 @@ from .config import Config
 _runtime_file_token = token_urlsafe(24)
 
 
-def register_archive_file_route(config: Config) -> None:
+def register_archive_file_route(config: Config) -> bool:
     driver = get_driver()
     server_app = getattr(driver, "server_app", None)
     if server_app is None or not hasattr(server_app, "add_api_route"):
-        logger.warning("eraTW archive HTTP route is unavailable: current driver has no server_app")
-        return
+        message = "eraTW archive HTTP route is unavailable: current driver has no server_app"
+        if config.eratw_file_base_url:
+            raise RuntimeError(f"{message}, but eratw_file_base_url is configured")
+        logger.warning(message)
+        return False
 
     from starlette.responses import FileResponse, Response
 
@@ -55,6 +58,7 @@ def register_archive_file_route(config: Config) -> None:
         methods=["GET"],
     )
     logger.info(f"eraTW archive HTTP route registered: {route_prefix}/{{filename}}")
+    return True
 
 
 def build_archive_download_url(path: Path, config: Config) -> str | None:

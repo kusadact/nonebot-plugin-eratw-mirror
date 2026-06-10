@@ -14,7 +14,12 @@ from nonebot_plugin_apscheduler import scheduler
 
 from .config import Config, plugin_config
 from .file_server import register_archive_file_route
-from .message import send_payload_to_group, send_payload_to_private
+from .message import (
+    send_payload_forward_to_group,
+    send_payload_to_group,
+    send_payload_to_private,
+    upload_payload_archive_to_group,
+)
 from .mirror import MirrorService
 from .schedule import parse_schedule
 
@@ -90,6 +95,7 @@ async def run_scheduled_check() -> None:
             f"pushing to {len(plugin_config.eratw_group_ids)} groups"
         )
         target_groups = [int(group_id) for group_id in plugin_config.eratw_group_ids]
+        uploaded_groups = service.uploaded_groups(payload)
         successful_groups = service.successful_groups(payload)
         pending_groups = [group_id for group_id in target_groups if group_id not in successful_groups]
         if not pending_groups:
@@ -102,7 +108,23 @@ async def run_scheduled_check() -> None:
         for group_id in pending_groups:
             logger.info(f"eraTW scheduled push started for group {group_id}")
             try:
-                await send_payload_to_group(bot, group_id, payload, plugin_config)
+                archive_uploaded = group_id in uploaded_groups
+                if not archive_uploaded:
+                    await upload_payload_archive_to_group(bot, group_id, payload, plugin_config)
+                    service.mark_group_uploaded(payload, group_id)
+                    archive_uploaded = True
+                else:
+                    logger.info(
+                        f"eraTW archive already uploaded to group {group_id}; "
+                        "skipping upload and retrying forward message"
+                    )
+                await send_payload_forward_to_group(
+                    bot,
+                    group_id,
+                    payload,
+                    plugin_config,
+                    archive_uploaded=archive_uploaded,
+                )
             except Exception:
                 failed_groups.append(group_id)
                 logger.exception(f"eraTW scheduled push failed for group {group_id}")
