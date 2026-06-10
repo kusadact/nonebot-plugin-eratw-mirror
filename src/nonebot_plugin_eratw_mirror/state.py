@@ -72,15 +72,25 @@ class StateStore:
     def read_successful_groups(self, sha: str) -> set[int]:
         return self._read_group_state("group_push_success", sha)
 
-    def read_uploaded_groups(self, sha: str) -> set[int]:
+    def read_uploaded_groups(self, sha: str, archive_sha256: str) -> set[int]:
+        data = self.read_state().get("group_upload_success")
+        if not isinstance(data, dict) or data.get("sha") != sha:
+            return set()
+        if data.get("archive_sha256") != archive_sha256:
+            return set()
         return self._read_group_state("group_upload_success", sha)
 
     def add_successful_group(self, sha: str, group_id: int) -> None:
         self._add_group_state("group_push_success", sha, group_id)
         logger.info(f"eraTW recorded successful group push for {sha[:8]}: {group_id}")
 
-    def add_uploaded_group(self, sha: str, group_id: int) -> None:
-        self._add_group_state("group_upload_success", sha, group_id)
+    def add_uploaded_group(self, sha: str, archive_sha256: str, group_id: int) -> None:
+        self._add_group_state(
+            "group_upload_success",
+            sha,
+            group_id,
+            extra={"archive_sha256": archive_sha256},
+        )
         logger.info(f"eraTW recorded successful group archive upload for {sha[:8]}: {group_id}")
 
     def _read_group_state(self, key: str, sha: str) -> set[int]:
@@ -98,11 +108,20 @@ class StateStore:
                 continue
         return result
 
-    def _add_group_state(self, key: str, sha: str, group_id: int) -> None:
+    def _add_group_state(
+        self,
+        key: str,
+        sha: str,
+        group_id: int,
+        *,
+        extra: dict[str, object] | None = None,
+    ) -> None:
         state = self.read_state()
         data = state.get(key)
         if not isinstance(data, dict) or data.get("sha") != sha:
             data = {"sha": sha, "groups": []}
+        if extra:
+            data.update(extra)
         groups = data.get("groups")
         if not isinstance(groups, list):
             groups = []

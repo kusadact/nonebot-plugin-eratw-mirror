@@ -91,13 +91,13 @@ class MirrorService:
         return self.state.read_successful_groups(payload.target_sha)
 
     def uploaded_groups(self, payload: UpdatePayload) -> set[int]:
-        return self.state.read_uploaded_groups(payload.target_sha)
+        return self.state.read_uploaded_groups(payload.target_sha, payload.archive.sha256)
 
     def mark_group_success(self, payload: UpdatePayload, group_id: int) -> None:
         self.state.add_successful_group(payload.target_sha, group_id)
 
     def mark_group_uploaded(self, payload: UpdatePayload, group_id: int) -> None:
-        self.state.add_uploaded_group(payload.target_sha, group_id)
+        self.state.add_uploaded_group(payload.target_sha, payload.archive.sha256, group_id)
 
     async def _build_single_commit_payload(self, client: GitGudClient, sha: str) -> UpdatePayload:
         logger.info(f"eraTW preparing single commit payload: {sha[:8]}")

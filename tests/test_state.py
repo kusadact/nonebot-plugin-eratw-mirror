@@ -51,14 +51,15 @@ def test_group_upload_state_is_independent_from_push_success(tmp_path: Path):
     state = _load_state_module(tmp_path)
     store = state.StateStore()
 
-    store.add_uploaded_group("abc123", 10001)
+    store.add_uploaded_group("abc123", "sha-a", 10001)
 
-    assert store.read_uploaded_groups("abc123") == {10001}
+    assert store.read_uploaded_groups("abc123", "sha-a") == {10001}
+    assert store.read_uploaded_groups("abc123", "sha-b") == set()
     assert store.read_successful_groups("abc123") == set()
 
     store.add_successful_group("abc123", 10001)
 
-    assert store.read_uploaded_groups("abc123") == {10001}
+    assert store.read_uploaded_groups("abc123", "sha-a") == {10001}
     assert store.read_successful_groups("abc123") == {10001}
 
 
@@ -66,9 +67,9 @@ def test_group_upload_state_is_cleared_after_final_success(tmp_path: Path):
     state = _load_state_module(tmp_path)
     store = state.StateStore()
 
-    store.add_uploaded_group("abc123", 10001)
+    store.add_uploaded_group("abc123", "sha-a", 10001)
     store.add_successful_group("abc123", 10001)
     store.set_last_success("abc123", "2026-06-10T04:00:00+08:00")
 
-    assert store.read_uploaded_groups("abc123") == set()
+    assert store.read_uploaded_groups("abc123", "sha-a") == set()
     assert store.read_successful_groups("abc123") == set()
