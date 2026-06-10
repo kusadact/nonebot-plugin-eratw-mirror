@@ -69,8 +69,6 @@ def _git_url(config: Config) -> str:
 
 
 def _worker_proxy(config: Config) -> str | None:
-    if config.eratw_worker_proxy is None:
-        return _clean_optional_text(config.eratw_proxy)
     return _clean_optional_text(config.eratw_worker_proxy)
 
 

@@ -50,14 +50,14 @@ def _config(proxy: str | None, worker_proxy: str | None):
     )
 
 
-def test_worker_proxy_falls_back_to_bot_proxy():
+def test_worker_proxy_does_not_fall_back_to_bot_proxy():
     remote_worker = _load_remote_worker_module()
 
     assert (
         remote_worker._worker_proxy(
             _config(" http://bot-proxy.example:7890 ", None)
         )
-        == "http://bot-proxy.example:7890"
+        is None
     )
 
 
