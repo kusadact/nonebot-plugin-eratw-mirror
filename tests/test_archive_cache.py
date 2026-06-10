@@ -177,3 +177,37 @@ def test_sync_git_repo_reports_final_retry_failure(tmp_path: Path, monkeypatch):
         asyncio.run(archive._sync_git_repo(tmp_path / "repo.git", "abc123", config))
 
     assert fetch_attempts == 3
+
+
+def test_git_step_does_not_retry_after_git_timeout(tmp_path: Path, monkeypatch):
+    archive = _load_archive_module()
+    config = _config()
+    config.eratw_git_retries = 5
+    attempts = 0
+    sleeps: list[float] = []
+    removed: list[Path] = []
+
+    async def fake_sleep(delay: float):
+        sleeps.append(delay)
+
+    async def timed_out_step(*args):
+        nonlocal attempts
+        attempts += 1
+        raise archive.GitOperationTimeout("timed out")
+
+    monkeypatch.setattr(archive.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(archive, "_remove_invalid_git_repo", lambda repo_dir: removed.append(repo_dir))
+
+    with pytest.raises(archive.GitOperationTimeout, match="timed out"):
+        asyncio.run(
+            archive._run_git_step(
+                "git fetch main",
+                tmp_path / "repo.git",
+                config,
+                timed_out_step,
+            )
+        )
+
+    assert attempts == 1
+    assert sleeps == []
+    assert removed == []

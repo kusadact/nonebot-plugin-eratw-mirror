@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import shutil
+import threading
 from pathlib import Path
 from typing import Callable, TypeVar
 
@@ -20,6 +21,15 @@ from .models import ArchiveInfo
 T = TypeVar("T")
 GIT_FETCH_DEPTH = 1
 ARCHIVE_CACHE_VERSION = 1
+_git_operation_lock = threading.Lock()
+
+
+class GitOperationTimeout(RuntimeError):
+    pass
+
+
+class GitOperationCancelled(RuntimeError):
+    pass
 
 
 async def build_encrypted_archive(
@@ -128,6 +138,12 @@ async def _run_git_step(
     for attempt in range(1, attempts + 1):
         try:
             return await func(*args, **kwargs)
+        except GitOperationTimeout:
+            logger.warning(
+                f"eraTW {label} timed out; skipping retry because the underlying "
+                "Git operation may still be finishing"
+            )
+            raise
         except Exception as exc:
             last_error = exc
             _remove_invalid_git_repo(repo_dir)
@@ -264,28 +280,55 @@ async def _run_git_operation(
     *args: object,
     **kwargs: object,
 ) -> T:
-    try:
-        return await asyncio.wait_for(
-            asyncio.to_thread(_run_with_git_env, config, func, *args, **kwargs),
-            timeout=config.eratw_timeout,
-        )
-    except asyncio.TimeoutError:
-        raise RuntimeError(
-            f"Git operation timed out after {config.eratw_timeout} seconds: {label}"
-        ) from None
+    cancel_event = threading.Event()
+    task = asyncio.create_task(
+        asyncio.to_thread(_run_with_git_env, config, func, cancel_event, *args, **kwargs)
+    )
+    done, _ = await asyncio.wait({task}, timeout=config.eratw_timeout)
+    if task in done:
+        return task.result()
+    cancel_event.set()
+    task.add_done_callback(lambda completed: _consume_late_git_result(label, completed))
+    raise GitOperationTimeout(
+        f"Git operation timed out after {config.eratw_timeout} seconds: {label}"
+    )
 
 
 def _run_with_git_env(
     config: Config,
     func: Callable[..., T],
+    cancel_event: threading.Event,
     *args: object,
     **kwargs: object,
 ) -> T:
-    previous = _apply_git_env(config)
+    while True:
+        if cancel_event.is_set():
+            raise GitOperationCancelled("Git operation was cancelled before it started")
+        if _git_operation_lock.acquire(timeout=0.2):
+            break
     try:
-        return func(*args, **kwargs)
+        if cancel_event.is_set():
+            raise GitOperationCancelled("Git operation was cancelled before it started")
+        previous = _apply_git_env(config)
+        try:
+            return func(*args, **kwargs)
+        finally:
+            _restore_env(previous)
     finally:
-        _restore_env(previous)
+        _git_operation_lock.release()
+
+
+def _consume_late_git_result(label: str, task: asyncio.Task[T]) -> None:
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        logger.debug(f"eraTW timed-out Git operation task was cancelled: {label}")
+    except GitOperationCancelled:
+        logger.debug(f"eraTW timed-out Git operation cancelled before start: {label}")
+    except Exception as exc:
+        logger.warning(f"eraTW timed-out Git operation finished with error: {label}: {exc}")
+    else:
+        logger.info(f"eraTW timed-out Git operation eventually finished: {label}")
 
 
 def _remove_invalid_git_repo(repo_dir: Path) -> None:
