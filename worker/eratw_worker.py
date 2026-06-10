@@ -329,7 +329,13 @@ def _export_commit_tree(repo_dir: Path, destination: Path, sha: str) -> None:
             target.parent.mkdir(parents=True, exist_ok=True)
             obj = repo[entry.sha]
             if stat.S_ISLNK(entry.mode):
-                os.symlink(os.fsdecode(obj.data), target)
+                link_target = os.fsdecode(obj.data)
+                resolved = (target.parent / link_target).resolve()
+                if not str(resolved).startswith(str(root) + os.sep) and resolved != root:
+                    raise RuntimeError(
+                        f"Symlink escapes export root: {entry.path!r} -> {link_target!r}"
+                    )
+                os.symlink(link_target, target)
                 continue
             if not stat.S_ISREG(entry.mode):
                 raise RuntimeError(f"Unsupported git entry mode {entry.mode:o}: {entry.path!r}")
@@ -441,6 +447,9 @@ def _archive_metadata_path(path: Path) -> Path:
     return path.with_suffix(f"{path.suffix}.json")
 
 
+_git_env_lock = Lock()
+
+
 def _with_git_env(proxy: str, func, *args, **kwargs):
     updates = {"GIT_TERMINAL_PROMPT": "0"}
     if proxy:
@@ -454,16 +463,17 @@ def _with_git_env(proxy: str, func, *args, **kwargs):
                 "ALL_PROXY": proxy,
             }
         )
-    previous = {key: os.environ.get(key) for key in updates}
-    os.environ.update(updates)
-    try:
-        return func(*args, **kwargs)
-    finally:
-        for key, value in previous.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
+    with _git_env_lock:
+        previous = {key: os.environ.get(key) for key in updates}
+        os.environ.update(updates)
+        try:
+            return func(*args, **kwargs)
+        finally:
+            for key, value in previous.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
 
 
 def _is_valid_git_repo(repo_dir: Path) -> bool:
