@@ -135,7 +135,7 @@ def _repository_name(config: Config) -> str:
 
 
 def _archive_text(payload: UpdatePayload, *, archive_uploaded: bool) -> str:
-    status = "已上传群文件" if archive_uploaded else "未上传群文件，请查看 Bot 本地文件路径"
+    status = "已上传群文件" if archive_uploaded else "未上传群文件"
     size_mb = payload.archive.size / 1024 / 1024
     return "\n".join(
         [
@@ -145,6 +145,5 @@ def _archive_text(payload: UpdatePayload, *, archive_uploaded: bool) -> str:
             f"大小: {size_mb:.2f} MiB",
             f"密码: {payload.archive.password}",
             f"sha256: {payload.archive.sha256}",
-            f"本地路径: {payload.archive.path}",
         ]
     )
