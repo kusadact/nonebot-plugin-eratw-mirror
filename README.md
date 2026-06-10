@@ -11,6 +11,12 @@ GitGud eraTW 魔改仓库更新搬运插件。
 5. 提取 `魔改版更新记录文档/补丁&readme集/ADD_BANQUET_开发日志.md` 在本次更新中的新增内容。
 6. 上传 7z 群文件，并发送合并转发消息。
 
+## 分支选择
+
+主分支适合 Bot 服务器自己完成 Git 拉取、源码导出、7z 打包和临时文件下载服务。也就是说，Git 缓存和归档文件都保存在 Bot 进程使用的 localstore data/cache 目录中；如果 Bot 和 OneBot/NapCat 分容器部署，需要配置 `eratw_file_base_url` 让 OneBot 端能下载 Bot 生成的压缩包。
+
+如果希望把 Git 拉取和 7z 打包放到另一台机器或容器上，可以使用 [worker 分支](https://github.com/kusadact/nonebot-plugin-eratw-mirror/tree/feat/pack-worker)。worker 分支保留 Bot 端的更新检查、消息发送和群文件上传流程，但压缩包由独立 Python worker 服务生成并通过 worker URL 提供下载。它适合 Bot 服务器磁盘/CPU/网络不适合打包、worker 服务器需要单独代理地址，或 NapCat 更容易访问 worker 下载地址的部署方式。
+
 ## 安装
 
 在 NoneBot 项目目录中安装插件：
