@@ -78,7 +78,16 @@ class StateStore:
             return set()
         if data.get("archive_sha256") != archive_sha256:
             return set()
-        return self._read_group_state("group_upload_success", sha)
+        groups = data.get("groups")
+        if not isinstance(groups, list):
+            return set()
+        result: set[int] = set()
+        for group_id in groups:
+            try:
+                result.add(int(group_id))
+            except (TypeError, ValueError):
+                continue
+        return result
 
     def add_successful_group(self, sha: str, group_id: int) -> None:
         self._add_group_state("group_push_success", sha, group_id)
