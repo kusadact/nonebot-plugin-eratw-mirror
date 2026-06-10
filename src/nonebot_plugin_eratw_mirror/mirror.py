@@ -69,19 +69,15 @@ class MirrorService:
                 )
                 return payload
 
-    async def prepare_test_payload(self) -> tuple[UpdatePayload, bool]:
-        logger.info("eraTW test payload requested")
-        cached = self.state.read_last_payload()
-        if cached is not None:
-            logger.info(f"eraTW using cached test payload: {cached.target_short_sha}")
-            return cached, True
+    async def prepare_latest_payload(self) -> UpdatePayload:
+        logger.info("eraTW latest payload requested")
         async with self._lock:
             async with GitGudClient(self.config) as client:
                 head = await client.get_branch_head()
-                logger.info(f"eraTW no cached payload; preparing latest commit payload: {head.short_id}")
+                logger.info(f"eraTW preparing latest payload: {head.short_id}")
                 payload = await self._build_single_commit_payload(client, head.id)
                 self.state.write_last_payload(payload)
-                return payload, False
+                return payload
 
     def mark_success(self, payload: UpdatePayload) -> None:
         logger.info(f"eraTW marking push success: {payload.target_short_sha}")

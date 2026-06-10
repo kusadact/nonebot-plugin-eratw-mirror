@@ -70,9 +70,14 @@ eratw_file_base_url="http://nonebot:8088"
 
 ```text
 /eratw测试推送
+/拉取最新版
 ```
 
-仅限 SuperUser 使用。优先重发最近一次已生成的推送；如果没有历史推送，就拉取最新 commit，生成压缩包，并发送测试合并转发消息。测试命令不会更新 `last_success_sha`。
+仅限 SuperUser 使用。
+
+`/eratw测试推送` 每次都会拉取当前分支最新 commit，生成压缩包，并发送测试合并转发消息。若该 commit 的归档已存在，会直接复用缓存归档；测试命令不会更新 `last_success_sha`。
+
+`/拉取最新版` 仅在群聊中使用，只向发送命令的群推送当前分支最新 commit。推送成功后会更新 `last_success_sha`；如果发送失败，则不会更新。
 
 ## 部署注意
 

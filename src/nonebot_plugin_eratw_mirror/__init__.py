@@ -26,7 +26,7 @@ from .schedule import parse_schedule
 __plugin_meta__ = PluginMetadata(
     name="eraTW Mirror",
     description="搬运 GitGud eraTW 更新归档和开发日志",
-    usage="/eratw测试推送",
+    usage="/eratw测试推送\n/拉取最新版",
     type="application",
     config=Config,
     supported_adapters={"~onebot.v11"},
@@ -54,26 +54,54 @@ test_push = on_command(
     block=True,
 )
 
+pull_latest = on_command(
+    "拉取最新版",
+    permission=SUPERUSER,
+    priority=plugin_config.eratw_command_priority,
+    block=True,
+)
+
 
 @test_push.handle()
 async def _(bot: Bot, event: MessageEvent, matcher: Matcher) -> None:
     try:
         logger.info(f"eraTW test push command triggered by user {event.user_id}")
         await matcher.send("开始准备 eraTW 测试推送")
-        payload, from_cache = await service.prepare_test_payload()
+        payload = await service.prepare_latest_payload()
         if isinstance(event, GroupMessageEvent):
             logger.info(f"eraTW test push target is group {event.group_id}")
             await send_payload_to_group(bot, int(event.group_id), payload, plugin_config)
         else:
             logger.info(f"eraTW test push target is private user {event.user_id}")
             await send_payload_to_private(bot, int(event.user_id), payload, plugin_config)
-        source = "历史缓存" if from_cache else "最新 commit"
-        await matcher.finish(f"eraTW 测试推送完成，来源：{source}")
+        await matcher.finish(f"eraTW 测试推送完成，已拉取最新 commit：{payload.target_short_sha}")
     except FinishedException:
         raise
     except Exception as exc:
         logger.exception("eraTW test push failed")
         await matcher.finish(f"eraTW 测试推送失败：{exc}")
+
+
+@pull_latest.handle()
+async def _(bot: Bot, event: MessageEvent, matcher: Matcher) -> None:
+    try:
+        logger.info(f"eraTW manual latest command triggered by user {event.user_id}")
+        if not isinstance(event, GroupMessageEvent):
+            await matcher.finish("请在目标群内使用 /拉取最新版")
+        group_id = int(event.group_id)
+        await matcher.send("开始拉取 eraTW 最新版")
+        payload = await service.prepare_latest_payload()
+        logger.info(f"eraTW manual latest push target is group {group_id}")
+        await send_payload_to_group(bot, group_id, payload, plugin_config)
+        service.mark_success(payload)
+        await matcher.finish(
+            f"eraTW 最新版推送完成，last_success_sha 已更新：{payload.target_short_sha}"
+        )
+    except FinishedException:
+        raise
+    except Exception as exc:
+        logger.exception("eraTW manual latest push failed")
+        await matcher.finish(f"eraTW 最新版拉取失败：{exc}")
 
 
 async def run_scheduled_check() -> None:
